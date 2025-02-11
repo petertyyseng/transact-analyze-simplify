@@ -18,7 +18,7 @@ export const Chat = () => {
 
     const message: ChatMessage = {
       id: crypto.randomUUID(),
-      sender: "User",
+      sender: "使用者",
       content: newMessage,
       timestamp: new Date().toISOString(),
       attachedCsvData: csvFile ? URL.createObjectURL(csvFile) : undefined,
@@ -29,8 +29,8 @@ export const Chat = () => {
     setCsvFile(null);
     
     toast({
-      title: "Message sent",
-      description: "Your message has been sent successfully.",
+      title: "訊息已送出",
+      description: "您的訊息已成功送出。",
     });
   };
 
@@ -39,19 +39,18 @@ export const Chat = () => {
     if (file && file.type === "text/csv") {
       setCsvFile(file);
       toast({
-        title: "CSV file attached",
+        title: "CSV 檔案已附加",
         description: file.name,
       });
     } else {
       toast({
-        title: "Invalid file type",
-        description: "Please upload a CSV file",
+        title: "無效的檔案類型",
+        description: "請上傳 CSV 檔案",
         variant: "destructive",
       });
     }
   };
 
-  // Group messages by date for the history sidebar
   const groupedMessages = messages.reduce((groups: Record<string, ChatMessage[]>, message) => {
     const date = new Date(message.timestamp).toLocaleDateString();
     if (!groups[date]) {
@@ -67,7 +66,7 @@ export const Chat = () => {
       <div className="w-64 bg-white rounded-lg shadow-sm p-4 overflow-y-auto">
         <div className="flex items-center gap-2 mb-4">
           <History className="w-5 h-5 text-primary" />
-          <h3 className="text-sm font-semibold">Chat History</h3>
+          <h3 className="text-sm font-semibold">聊天記錄</h3>
         </div>
         <div className="space-y-4">
           {Object.entries(groupedMessages).map(([date, dateMessages]) => (
@@ -93,7 +92,7 @@ export const Chat = () => {
       <div className="flex-1 bg-white rounded-lg shadow-sm p-4">
         <div className="flex items-center gap-2 mb-4">
           <MessageCircle className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-semibold">Chat & CSV Collaboration</h2>
+          <h2 className="text-lg font-semibold">聊天與 CSV 協作</h2>
         </div>
 
         <div className="flex-1 overflow-y-auto mb-4 space-y-4">
@@ -111,7 +110,7 @@ export const Chat = () => {
               <p className="mt-1 text-neutral-700">{message.content}</p>
               {message.attachedCsvData && (
                 <div className="mt-2 p-2 bg-primary/10 rounded text-sm">
-                  📎 CSV file attached
+                  📎 已附加 CSV 檔案
                 </div>
               )}
             </div>
@@ -122,7 +121,7 @@ export const Chat = () => {
           <Textarea
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Type your message..."
+            placeholder="輸入您的訊息..."
             className="min-h-[80px]"
           />
           <div className="flex justify-between items-center">
@@ -140,7 +139,7 @@ export const Chat = () => {
                 onClick={() => document.getElementById("csv-upload")?.click()}
               >
                 <Upload className="w-4 h-4 mr-2" />
-                Attach CSV
+                附加 CSV
               </Button>
               {csvFile && (
                 <span className="text-sm text-neutral-500">{csvFile.name}</span>
@@ -148,7 +147,7 @@ export const Chat = () => {
             </div>
             <Button onClick={handleSendMessage} className="gap-2">
               <Send className="w-4 h-4" />
-              Send
+              送出
             </Button>
           </div>
         </div>
@@ -156,3 +155,4 @@ export const Chat = () => {
     </div>
   );
 };
+
