@@ -6,6 +6,7 @@ import { TransactionStats } from "@/components/TransactionStats";
 import { TransactionChart } from "@/components/TransactionChart";
 import { Button } from "@/components/ui/button";
 import { PlusIcon } from "lucide-react";
+import { Chat } from "@/components/Chat";
 import type { Transaction } from "@/types/transaction";
 
 const Index = () => {
@@ -58,6 +59,10 @@ const Index = () => {
             <TransactionChart transactions={transactions} />
           </Card>
         </div>
+
+        <Card className="p-6">
+          <Chat />
+        </Card>
       </div>
     </div>
   );
