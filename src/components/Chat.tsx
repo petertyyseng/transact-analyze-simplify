@@ -3,8 +3,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { MessageCircle, Send, Upload, History } from "lucide-react";
-import { ChatMessage } from "@/types/chat";
+import { MessageCircle, Send, Upload, History, BarChart } from "lucide-react";
+import { ChatMessage, ColumnAnalysis } from "@/types/chat";
 import { useToast } from "@/hooks/use-toast";
 import * as XLSX from 'xlsx';
 
@@ -12,9 +12,34 @@ export const Chat = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [columnRange, setColumnRange] = useState("");
+  const [availableColumns, setAvailableColumns] = useState<string[]>([]);
   const { toast } = useToast();
 
-  const convertExcelToCSV = async (file: File): Promise<File> => {
+  const analyzeColumn = (data: any[][], columnIndex: number): ColumnAnalysis | undefined => {
+    try {
+      const columnValues = data.slice(1).map(row => {
+        const value = row[columnIndex];
+        return typeof value === 'string' ? parseFloat(value) : value;
+      }).filter(value => !isNaN(value));
+
+      if (columnValues.length === 0) return undefined;
+
+      return {
+        columnName: data[0][columnIndex],
+        min: Math.min(...columnValues),
+        max: Math.max(...columnValues),
+        average: columnValues.reduce((a, b) => a + b, 0) / columnValues.length,
+        sum: columnValues.reduce((a, b) => a + b, 0),
+        count: columnValues.length
+      };
+    } catch (error) {
+      console.error("Column analysis error:", error);
+      return undefined;
+    }
+  };
+
+  const convertExcelToCSV = async (file: File): Promise<[File, string[][]]> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -25,11 +50,14 @@ export const Chat = () => {
           const worksheet = workbook.Sheets[firstSheetName];
           const csv = XLSX.utils.sheet_to_csv(worksheet);
           
+          // Parse the CSV data to get columns
+          const parsedData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
+          
           // Create a new File object with the CSV content
           const csvBlob = new Blob([csv], { type: 'text/csv' });
           const csvFile = new File([csvBlob], `${file.name.split('.')[0]}.csv`, { type: 'text/csv' });
           
-          resolve(csvFile);
+          resolve([csvFile, parsedData]);
         } catch (error) {
           reject(error);
         }
@@ -37,6 +65,56 @@ export const Chat = () => {
       reader.onerror = (error) => reject(error);
       reader.readAsArrayBuffer(file);
     });
+  };
+
+  const handleAnalyzeColumns = () => {
+    if (!csvFile || !columnRange) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const csv = e.target?.result as string;
+        const workbook = XLSX.read(csv, { type: 'binary' });
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
+
+        // Parse column range (e.g., "A,C-E" -> [0,2,3,4])
+        const columns = columnRange.split(',').flatMap(range => {
+          const [start, end] = range.split('-').map(col => 
+            col.toUpperCase().charCodeAt(0) - 65
+          );
+          return end 
+            ? Array.from({ length: end - start + 1 }, (_, i) => start + i)
+            : [start];
+        });
+
+        // Analyze each selected column
+        const analyses = columns
+          .map(colIndex => analyzeColumn(data, colIndex))
+          .filter(analysis => analysis !== undefined) as ColumnAnalysis[];
+
+        if (analyses.length > 0) {
+          analyses.forEach(analysis => {
+            const analysisMessage: ChatMessage = {
+              id: crypto.randomUUID(),
+              sender: "系統",
+              content: `${analysis.columnName} 欄位分析結果：`,
+              timestamp: new Date().toISOString(),
+              columnAnalysis: analysis,
+            };
+            setMessages(prev => [...prev, analysisMessage]);
+          });
+        }
+      } catch (error) {
+        console.error("Analysis error:", error);
+        toast({
+          title: "分析錯誤",
+          description: "處理數據時發生錯誤",
+          variant: "destructive",
+        });
+      }
+    };
+    reader.readAsBinaryString(csvFile);
   };
 
   const handleSendMessage = () => {
@@ -53,6 +131,8 @@ export const Chat = () => {
     setMessages((prev) => [...prev, message]);
     setNewMessage("");
     setCsvFile(null);
+    setColumnRange("");
+    setAvailableColumns([]);
     
     toast({
       title: "訊息已送出",
@@ -68,6 +148,10 @@ export const Chat = () => {
     
     try {
       if (fileExtension === 'csv') {
+        const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
+        setAvailableColumns(data[0] || []);
         setCsvFile(file);
         toast({
           title: "CSV 檔案已附加",
@@ -79,7 +163,8 @@ export const Chat = () => {
           description: "請稍候，正在轉換檔案格式...",
         });
         
-        const csvFile = await convertExcelToCSV(file);
+        const [csvFile, data] = await convertExcelToCSV(file);
+        setAvailableColumns(data[0] || []);
         setCsvFile(csvFile);
         
         toast({
@@ -165,6 +250,16 @@ export const Chat = () => {
                   📎 已附加檔案
                 </div>
               )}
+              {message.columnAnalysis && (
+                <div className="mt-2 p-2 bg-primary/10 rounded text-sm space-y-1">
+                  <div className="font-medium">📊 分析結果：</div>
+                  <div>最小值：{message.columnAnalysis.min?.toFixed(2)}</div>
+                  <div>最大值：{message.columnAnalysis.max?.toFixed(2)}</div>
+                  <div>平均值：{message.columnAnalysis.average?.toFixed(2)}</div>
+                  <div>總和：{message.columnAnalysis.sum?.toFixed(2)}</div>
+                  <div>資料筆數：{message.columnAnalysis.count}</div>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -177,7 +272,7 @@ export const Chat = () => {
             className="min-h-[80px]"
           />
           <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Input
                 type="file"
                 accept=".csv,.xls,.xlsx"
@@ -194,7 +289,23 @@ export const Chat = () => {
                 附加檔案
               </Button>
               {csvFile && (
-                <span className="text-sm text-neutral-500">{csvFile.name}</span>
+                <>
+                  <span className="text-sm text-neutral-500">{csvFile.name}</span>
+                  <Input
+                    placeholder="輸入欄位範圍 (例: A,C-E)"
+                    value={columnRange}
+                    onChange={(e) => setColumnRange(e.target.value)}
+                    className="w-40"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAnalyzeColumns}
+                  >
+                    <BarChart className="w-4 h-4 mr-2" />
+                    分析欄位
+                  </Button>
+                </>
               )}
             </div>
             <Button onClick={handleSendMessage} className="gap-2">
@@ -202,6 +313,11 @@ export const Chat = () => {
               送出
             </Button>
           </div>
+          {availableColumns.length > 0 && (
+            <div className="text-sm text-neutral-500 mt-2">
+              可用欄位：{availableColumns.map((col, index) => `${String.fromCharCode(65 + index)}(${col})`).join(', ')}
+            </div>
+          )}
         </div>
       </div>
     </div>
